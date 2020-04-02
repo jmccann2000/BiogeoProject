@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import elevation
 import math
 import shapefile as shp
@@ -8,18 +9,26 @@ import shapefile as shp
 class bin:
     #object instantiation
     def __init__(self,posX, posY):
+        testBin.elevation = 2000
+        testBin.temperature = 50
+        testBin.tempElevationCorrection()
+        self.assertEquals(testBin.temperature,56.6)
+
         self.x = posX
         self.y = posY
         self.moisture = 0
         self.temperature = 0
         self.elevation = 0
 
-    #Determines if bin is considered dry
-    def isDry(self):
-        returnVal = True
-        if(self.moisture > 5):
-            returnVal = False
-        return returnVal
+    #Adjustes temperature for elevation
+    def tempElevationCorrection(self):
+        if self.elevation >= 1000 :
+            if self.moisture < 5:
+                #if dry temp changes at rate of 5.4 F per 1000 ft
+                self.temperature += self.elevation/1000 * 5.4
+            else:
+                #if wet temp changes at rate of 3.3 F per 1000 ft
+                self.temperature += self.elevation/1000 * 3.3
 
 #Generates daily temperature for year
 #alter cosine function to have a period of 365, and range from [73,93]
@@ -35,16 +44,15 @@ def hourlyTemp(dayTemp,hour):
     hourTemp = math.cos(trigInput)*-2+dayTemp
     return hourTemp
 
-#Adjustes temperature for elevation, implement later, probably needs to be in class "bin"
-#def tempElevationCorrection(hourTemp,elevation):
-
 #Maui elevation map shape file
-sf = shp.Reader("maucntrs100.shp/maucntrs100.shp")
+sf = shp.Reader("../maucntrs100/maucntrs100.shp")
 
 #plots shapefile
-plt.figure()
+fig = plt.figure()
+rect = fig.patch
+
 for shape in sf.shapeRecords():
     x = [i[0] for i in shape.shape.points[:]]
     y = [i[1] for i in shape.shape.points[:]]
-    plt.plot(x,y)
+    plt.plot(x,y,'c',linewidth = 0.3)
 plt.show()
