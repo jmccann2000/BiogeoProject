@@ -1,24 +1,24 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import elevation
 import math
 import shapefile as shp
+import shapely.geometry as geom
+from shapely.ops import polygonize
+import geopandas as gpd
+
 
 #Class for bin object on map figure
 class bin:
     #object instantiation
     def __init__(self,posX, posY):
-        testBin.elevation = 2000
-        testBin.temperature = 50
-        testBin.tempElevationCorrection()
-        self.assertEquals(testBin.temperature,56.6)
-
         self.x = posX
         self.y = posY
         self.moisture = 0
         self.temperature = 0
         self.elevation = 0
+        self.xRange = (posX-1,posX+1)
+        self.yRange = (posY-1,posY-1)
 
     #Adjustes temperature for elevation
     def tempElevationCorrection(self):
@@ -44,15 +44,38 @@ def hourlyTemp(dayTemp,hour):
     hourTemp = math.cos(trigInput)*-2+dayTemp
     return hourTemp
 
-#Maui elevation map shape file
-sf = shp.Reader("../maucntrs100/maucntrs100.shp")
+#sets elevation of bin based on how many polygons the bin is contained in
+def setElevation(polygons,bin):
+    containCount = 0
+    binLoc = Point(bin.x,bin.y)
+    for shape in polygons:
+        if binLoc.within(shape):
+            containCount += 1
+    return containCount
 
+#Maui elevation map shape file
+sf = shp.Reader("NewElevation/Maui_Elevation_contours_100ft.shp")
 #plots shapefile
-fig = plt.figure()
-rect = fig.patch
+#fig = plt.figure()
+#rect = fig.patch
+#list of polygons equal to topography lines
+#elevLines = []
 
 for shape in sf.shapeRecords():
-    x = [i[0] for i in shape.shape.points[:]]
-    y = [i[1] for i in shape.shape.points[:]]
+    x = [i[0]- 740134 for i in shape.shape.points[:]]
+    y = [i[1]- 2277470 for i in shape.shape.points[:]]
+
+#    #Creates tuple (x,y) for creating Polygons
+#    coordPairs = [(x[i],y[i]) for i in range(0, len(x))]
+#    tempLine = LineString(coordPairs)
+#    elevLines.append(tempLine)
     plt.plot(x,y,'c',linewidth = 0.3)
+#
+#elevPolygons = polygonize(elevLines)
+#for shape in elevPolygons:
+#    x,y =shape.exterior.xy
+#    plt.plot(x,y,'c',linewidth = 0.3)
+#testBin = bin(38468.5,23767.1)
+#factor = setElevation(elevPolygons,testBin)
+#print(factor)
 plt.show()
