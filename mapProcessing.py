@@ -5,7 +5,10 @@ import math
 import shapefile as shp
 import shapely.geometry as geom
 from shapely.ops import polygonize
+from shapely.strtree import STRtree
 import geopandas as gpd
+import gdal
+import rasterio
 
 
 #Class for bin object on map figure
@@ -44,38 +47,28 @@ def hourlyTemp(dayTemp,hour):
     hourTemp = math.cos(trigInput)*-2+dayTemp
     return hourTemp
 
-#sets elevation of bin based on how many polygons the bin is contained in
-def setElevation(polygons,bin):
-    containCount = 0
-    binLoc = Point(bin.x,bin.y)
-    for shape in polygons:
-        if binLoc.within(shape):
-            containCount += 1
-    return containCount
+#Sets elevation of bin based on location
+def setElevation(bin, data):
+    geoSet = data['geometry']
+    geoTree = STRtree(geoSet)
+    binPoint = geom.Point(bin.x,bin.y)
+    #Finds nearest geometry to bin location
+    result = geoTree.nearest(binPoint)
+    #Parses geopanda to find location of result also getting elevation
+    for index, row in data.iterrows():
+        if row['geometry'] == result:
+            bin.elevation = row['CONTOUR']
 
 #Maui elevation map shape file
-sf = shp.Reader("NewElevation/Maui_Elevation_contours_100ft.shp")
-#plots shapefile
-#fig = plt.figure()
-#rect = fig.patch
-#list of polygons equal to topography lines
-#elevLines = []
+fp = "maucntrs100.shp/maucntrs100.shp"
+data = gpd.read_file(fp)
 
-for shape in sf.shapeRecords():
-    x = [i[0]- 740134 for i in shape.shape.points[:]]
-    y = [i[1]- 2277470 for i in shape.shape.points[:]]
+testBin = bin(767479,2320580)
+setElevation(testBin,data)
+print(testBin.elevation)
 
-#    #Creates tuple (x,y) for creating Polygons
-#    coordPairs = [(x[i],y[i]) for i in range(0, len(x))]
-#    tempLine = LineString(coordPairs)
-#    elevLines.append(tempLine)
-    plt.plot(x,y,'c',linewidth = 0.3)
-#
-#elevPolygons = polygonize(elevLines)
-#for shape in elevPolygons:
-#    x,y =shape.exterior.xy
-#    plt.plot(x,y,'c',linewidth = 0.3)
-#testBin = bin(38468.5,23767.1)
-#factor = setElevation(elevPolygons,testBin)
-#print(factor)
+#print(data['geometry'])
+fig, ax = plt.subplots(1,1)
+
+data.plot(column = 'CONTOUR',ax=ax, legend = True,linewidth = 0.3)
 plt.show()
