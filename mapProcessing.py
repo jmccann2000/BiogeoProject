@@ -138,14 +138,32 @@ cdict = {'red': ((0.0, 0.0, 0.0),
                   (0.5, 1.0, 0.7),
                   (0.9, 0.2, 0.0),
                   (1.0, 0.0, 0.0))}
+
 my_cmap = m.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
-fig, ax = plt.subplots(1,1)
-ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
+fig, ax = plt.subplots(2,2, constrained_layout=True)
 
-land = ax.pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 75)
-plt.colorbar(land, ax=ax)
-anim = animation.FuncAnimation(fig, animate, interval = 10)
+#Remove all x and y tick values
+ax[0,0].set_yticklabels([])
+ax[0,0].set_xticklabels([])
+ax[0,1].set_yticklabels([])
+ax[0,1].set_xticklabels([])
+ax[1,1].set_yticklabels([])
+ax[1,1].set_xticklabels([])
+ax[1,0].set_yticklabels([])
+ax[1,0].set_xticklabels([])
+
+#Titles of subplots
+ax[0,0].set_title('Plant Coverage')
+ax[0,1].set_title('Temperature (F)')
+ax[1,1].set_title('Plant Data')
+ax[1,0].set_title('Moisture')
+
+ax[0,1].set(xlim=(2277308,2327400), ylim =(738641,813939))
+
+land = ax[0,1].pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 75)
+plt.colorbar(land, ax=ax[0,1])
+anim = animation.FuncAnimation(fig, animate, interval = 1)
 plt.show()
 #anim.save('myAnimation.gif', writer='imagemagick', fps=30)
 
