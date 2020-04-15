@@ -25,8 +25,12 @@ class bin:
         self.moisture = 0
         self.temperature = 0
         self.elevation = -100
-        self.xRange = (posX-1,posX+1)
-        self.yRange = (posY-1,posY-1)
+
+#Class defining plant types for growth display
+class plant:
+    def __init__(self,preferedTemp,preferedMoist):
+        self.temp = preferedTemp
+        self.moisture = preferedMoist
 
 #Generates daily temperature for year
 #alter cosine function to have a period of 365, and range from [73,93]
@@ -96,10 +100,54 @@ def generateTemp(xPoints, yPoints, elevation):
             temp_list.append(temp)
     return temp_list
 
+#Gets top,bottom,left, and right neighor values if present
+def getNeighbors(x,y,array):
+    returnArray = []
+    if(x-1 >= 0):
+        returnArray.append(array[x-1,y])
+    if(x+1 < array.shape[0]):
+        returnArray.append(array[x+1,y])
+    if(y-1 >= 0):
+        returnArray.append(array[x,y-1])
+    if(y+1 < array.shape[1]):
+        returnArray.append(array[x,y+1])
+    return returnArray
+
+
+#Generates points with habitability values from 0-10, used for plant spread
+def generateHabitability(plant, moistureList, tempAvgList, xVals, yVals):
+    habitList = []
+    for x in range(0, np.size(xVals)):
+        for y in range(0, np.size(yVals)):
+            neighborTemps = getNeighbors(x,y,tempAvgList)
+            neighborMoist = getNeighbors(x,y,moistureList)
+            neighborTempAvg = np.average(neighborTemps)
+            neighborMoistAvg = np.average(neighborMoist)
+
+            habitVal = 0
+
+            if abs(neighborMoistAvg - plant.moisture) < 10:
+                habitVal = habitVal + 5
+            elif abs(neighborMoistAvg - plant.moisture) < 20:
+                habitVal = habitVal + 3
+            elif abs(neighborMoistAvg - plant.moisture) < 30:
+                habitVal = habitVal + 1
+
+            if abs(neighborTempAvg - plant.temp) < 1:
+                habitVal = habitVal + 5
+            elif abs(neighborTempAvg - plant.temp) < 5:
+                habitVal = habitVal + 3
+            elif abs(neighborTempAvg - plant.temp) < 10:
+                habitVal = habitVal + 1
+
+            habitList.append(habitVal)
+
+    return habitList
+
 #Animation for colormap
 def animate(day):
     dayTempArray = np.full((np.size(x_grid),np.size(y_grid)),dailyTemp(day))
-    dayTempArray[mask] = 0
+    dayTempArray[notLandMask] = 0
     actualTemp = np.subtract(dayTempArray,elevChangesCorrected)
     land.set_array(actualTemp[:-1,:-1].flatten('K'))
 
@@ -114,7 +162,7 @@ elevReshape = np.reshape(elevData, (np.size(x_grid),np.size(y_grid)))
 elevFinal = np.rot90(elevReshape, 2)
 
 #Mask to array values that are not land
-mask = elevFinal < 0
+notLandMask = elevFinal < 0
 
 #Creates array of temperature change due to elevation
 elevationChanges = np.array(generateTemp(x_grid,y_grid,elevFinal))
@@ -122,7 +170,7 @@ elevChangesCorrected = np.reshape(elevationChanges,(np.size(x_grid),np.size(y_gr
 
 #Creates 2d array of values for temperature and masks values not on land
 dayTempArray = np.full((np.size(x_grid),np.size(y_grid)),dailyTemp(18))
-dayTempArray[mask] = 0
+dayTempArray[notLandMask] = 0
 
 #Subtracts elevationTempChange from the current temperature
 actualTemp = np.subtract(dayTempArray,elevChangesCorrected)
@@ -141,33 +189,22 @@ cdict = {'red': ((0.0, 0.0, 0.0),
 
 my_cmap = m.colors.LinearSegmentedColormap('my_colormap',cdict,256)
 
-fig, ax = plt.subplots(2,2, constrained_layout=True)
+fig, ax = plt.subplots(1,1)
 
 #Remove all x and y tick values
-ax[0,0].set_yticklabels([])
-ax[0,0].set_xticklabels([])
-ax[0,1].set_yticklabels([])
-ax[0,1].set_xticklabels([])
-ax[1,1].set_yticklabels([])
-ax[1,1].set_xticklabels([])
-ax[1,0].set_yticklabels([])
-ax[1,0].set_xticklabels([])
+ax.set_yticklabels([])
+ax.set_xticklabels([])
 
-#Titles of subplots
-ax[0,0].set_title('Plant Coverage')
-ax[0,1].set_title('Temperature (F)')
-ax[1,1].set_title('Plant Data')
-ax[1,0].set_title('Moisture')
+#Title
+ax.set_title('Temperature over year')
+#Limits to prevent animation from being shakey
+ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
 
-ax[0,1].set(xlim=(2277308,2327400), ylim =(738641,813939))
-
-land = ax[0,1].pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 75)
-plt.colorbar(land, ax=ax[0,1])
+land = ax.pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 75)
+plt.colorbar(land, ax=ax)
 anim = animation.FuncAnimation(fig, animate, interval = 1)
 plt.show()
 #anim.save('myAnimation.gif', writer='imagemagick', fps=30)
-
-
 
 #Reades in polygon for basemap of maui
 #with open('base.txt', 'r') as file:
