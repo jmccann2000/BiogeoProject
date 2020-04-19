@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as m
-#m.use("Agg")
-
 import matplotlib.animation as animation
 import math
 import shapefile as shp
@@ -131,16 +129,11 @@ def generateHabitability(plant, moistureList, tempAvgList, xVals, yVals):
             if abs(neighborMoistAvg - plant.moisture) < 10:
                 habitVal = habitVal + 5
             elif abs(neighborMoistAvg - plant.moisture) < 20:
-                habitVal = habitVal + 3
-            elif abs(neighborMoistAvg - plant.moisture) < 30:
-                habitVal = habitVal + 1
-
+                habitVal = habitVal + 2
             if abs(neighborTempAvg - plant.temp) < 1:
                 habitVal = habitVal + 5
             elif abs(neighborTempAvg - plant.temp) < 5:
-                habitVal = habitVal + 3
-            elif abs(neighborTempAvg - plant.temp) < 10:
-                habitVal = habitVal + 1
+                habitVal = habitVal + 2
 
             habitList.append(habitVal)
 
@@ -161,14 +154,10 @@ x_mesh,y_mesh = np.meshgrid(y_grid,x_grid)
 #Creates array of elevations
 elevData = np.array(fileToArray('elevResample.txt')).astype(np.float)
 elevFinal = np.reshape(elevData, (np.size(x_grid),np.size(y_grid)))
-#elevFinal = np.rot90(elevReshape, 2)
 
 #Creates array of moisture
 moistData = np.array(fileToArray('moistureResample.txt')).astype(np.float)
-#reversedMoist = moistData[::-1]
 moistFinal = np.reshape(moistData, (np.size(x_grid),np.size(y_grid)))
-
-
 
 #Mask to array values that are not land
 notLandMask = elevFinal < 0
@@ -183,6 +172,13 @@ dayTempArray[notLandMask] = 0
 
 #Subtracts elevationTempChange from the current temperature
 actualTemp = np.subtract(dayTempArray,elevChangesCorrected)
+
+#Generate habitability
+dryPlant = plant(45, 20)
+dryHabitability  = generateHabitability(dryPlant, moistFinal, actualTemp, x_grid, y_grid)
+dryHabFinal = np.reshape(dryHabitability,(np.size(x_grid),np.size(y_grid)))
+dryHabFinal[notLandMask] = -10
+
 
 #Colormap
 cdict = {'red': ((0.0, 0.0, 0.0),
@@ -210,15 +206,7 @@ ax.set_title('Temperature over year')
 #Limits to prevent animation from being shakey
 ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
 
-land = ax.pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 75)
+land = ax.pcolormesh(x_mesh,y_mesh,dryHabFinal,cmap = my_cmap, vmin = -10, vmax = 10)
 plt.colorbar(land, ax=ax)
-anim = animation.FuncAnimation(fig, animate, interval = 1)
+#anim = animation.FuncAnimation(fig, animate, interval = 1)
 plt.show()
-anim.save('myAnimation.gif', writer='imagemagick', fps=30)
-
-
-
-#
-#ax.pcolormesh(x_mesh,y_mesh,moistFinal,cmap = my_cmap, vmin = 0, vmax = 75)
-
-#plt.show()
