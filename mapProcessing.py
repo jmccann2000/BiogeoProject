@@ -11,6 +11,7 @@ from shapely.ops import polygonize
 from shapely.strtree import STRtree
 import shapely.wkt
 import geopandas as gpd
+import pandas as pd
 import rasterio
 from scipy import interpolate
 
@@ -80,23 +81,24 @@ def setElevation(bin, shapeData, tree, baseMap):
         bin.elevation = shapeData.iloc[closestIndex,0]
 
 #Adjustes temperature for elevation
-def tempElevationCorrection(elevation):
-    #if self.moisture < 5:
+def tempElevationCorrection(elevation, moisture):
+    if moisture < 20:
         #if dry temp changes at rate of 5.4 F per 1000 ft
-    return elevation/1000 * 5.4
-    #else:
+        return elevation/1000 * 5.4
+    else:
         #if wet temp changes at rate of 3.3 F per 1000 ft
-    #    return elevation/1000 * 3.3
+        return elevation/1000 * 3.3
 
-def generateTemp(xPoints, yPoints, elevation):
+def generateTemp(xPoints, yPoints, elevation, moisture):
     temp_list = []
     for x in range(0,np.size(xPoints)):
         for y in range(0,np.size(yPoints)):
             pointElev = elevation[x,y]
+            pointMoist = moisture[x,y]
             if pointElev < 0:
                 temp = 0
             else:
-                temp = tempElevationCorrection(pointElev)
+                temp = tempElevationCorrection(pointElev, pointMoist)
             temp_list.append(temp)
     return temp_list
 
@@ -158,14 +160,21 @@ x_mesh,y_mesh = np.meshgrid(y_grid,x_grid)
 
 #Creates array of elevations
 elevData = np.array(fileToArray('elevResample.txt')).astype(np.float)
-elevReshape = np.reshape(elevData, (np.size(x_grid),np.size(y_grid)))
-elevFinal = np.rot90(elevReshape, 2)
+elevFinal = np.reshape(elevData, (np.size(x_grid),np.size(y_grid)))
+#elevFinal = np.rot90(elevReshape, 2)
+
+#Creates array of moisture
+moistData = np.array(fileToArray('moistureResample.txt')).astype(np.float)
+#reversedMoist = moistData[::-1]
+moistFinal = np.reshape(moistData, (np.size(x_grid),np.size(y_grid)))
+
+
 
 #Mask to array values that are not land
 notLandMask = elevFinal < 0
 
 #Creates array of temperature change due to elevation
-elevationChanges = np.array(generateTemp(x_grid,y_grid,elevFinal))
+elevationChanges = np.array(generateTemp(x_grid,y_grid,elevFinal,moistFinal))
 elevChangesCorrected = np.reshape(elevationChanges,(np.size(x_grid),np.size(y_grid)))
 
 #Creates 2d array of values for temperature and masks values not on land
@@ -197,6 +206,7 @@ ax.set_xticklabels([])
 
 #Title
 ax.set_title('Temperature over year')
+
 #Limits to prevent animation from being shakey
 ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
 
@@ -204,10 +214,11 @@ land = ax.pcolormesh(x_mesh,y_mesh,actualTemp,cmap = my_cmap, vmin = 0, vmax = 7
 plt.colorbar(land, ax=ax)
 anim = animation.FuncAnimation(fig, animate, interval = 1)
 plt.show()
-#anim.save('myAnimation.gif', writer='imagemagick', fps=30)
+anim.save('myAnimation.gif', writer='imagemagick', fps=30)
 
-#Reades in polygon for basemap of maui
-#with open('base.txt', 'r') as file:
-#    baseData = file.read()
+
+
 #
-#mauiBase = shapely.wkt.loads(baseData)
+#ax.pcolormesh(x_mesh,y_mesh,moistFinal,cmap = my_cmap, vmin = 0, vmax = 75)
+
+#plt.show()
