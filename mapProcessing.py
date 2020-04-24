@@ -157,18 +157,21 @@ def calculateDistance(x1,y1,x2,y2):
 def closestPop(pointX,pointY):
     minDist = 1000
     global currentPopulation
-    for x in range(0, currentPopulation.shape[0]):
-        for y in range(0, currentPopulation.shape[1]):
-            if(currentPopulation[x,y] > 500):
-                tempDist = calculateDistance(pointX,pointY,x,y)
-                if(tempDist<minDist):
-                    minDist = tempDist
+    if(currentPopulation[pointX,pointY] == 0):
+        for x in range(0, currentPopulation.shape[0]):
+            for y in range(0, currentPopulation.shape[1]):
+                if(currentPopulation[x,y] > 500):
+                    tempDist = calculateDistance(pointX,pointY,x,y)
+                    if(tempDist<minDist):
+                        minDist = tempDist
     return minDist
 #Searches map for closest habitable area, used in determining if plant can survive to make it to new area
 def nearestHabitat(dict, habitArray):
     closestDist = 100
-    closestPoint = ()
+    closestPoint = (18,35)
+
     global notLandMask
+    global currentPopulation
     for x in range(0, habitArray.shape[0]):
         for y in range(0, habitArray.shape[1]):
             if(not notLandMask[x,y]):
@@ -178,21 +181,16 @@ def nearestHabitat(dict, habitArray):
                     if(dist < closestDist):
                         closestDist = dist
                         closestPoint = (x,y)
-    return closestPoint
+    return closestPoint, closestDist
 
 #Spreads population to habitable area if close enough
 def popDispersal(population,habitability):
     global posHabitDict
     global notLandMask
-    for x in range(0, currentPopulation.shape[0]):
-        for y in range(0, currentPopulation.shape[1]):
-            if(not notLandMask[x,y]):
-                if(population[x,y] == 0):
-                    nearestPoint = nearestHabitat(posHabitDict,habitability)
-                    dist = calculateDistance(x,y,nearestPoint[0],nearestPoint[1])
-                    if(dist < 7):
-                        population[x,y] = 100
-                        break
+
+    nearestPoint,distance = nearestHabitat(posHabitDict,habitability)
+    if(distance < 10):
+        population[nearestPoint[0],nearestPoint[1]] = 100
 
 #Handles when population would spread to neighboring points
 def populationSpread():
@@ -217,6 +215,7 @@ def animateGrowth(day):
     global currentPopulation
     global growthRates
     global testHabFinal
+    global maxPopulation
     prevDayPop = currentPopulation.copy()
     #Prevents populations over max population
     popMaxMask = currentPopulation < maxPopulation
@@ -321,5 +320,5 @@ ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
 
 land = ax.pcolormesh(x_mesh,y_mesh,currentPopulation,cmap = earthColor.reversed(), vmin = -1000, vmax = 6000)
 plt.colorbar(land, ax=ax)
-anim = animation.FuncAnimation(fig, animateGrowth, interval = 1)
+anim = animation.FuncAnimation(fig, animateGrowth, interval = 50)
 plt.show()
