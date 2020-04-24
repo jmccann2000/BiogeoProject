@@ -13,8 +13,6 @@ import pandas as pd
 import rasterio
 from scipy import interpolate
 
-
-
 #Class for bin object on map figure
 class bin:
     #object instantiation
@@ -113,9 +111,21 @@ def getNeighbors(x,y,array):
         returnArray.append(array[x,y+1])
     return returnArray
 
+def avgTemp(elevChanges):
+    averageTemp = np.zeros((np.size(x_grid),np.size(y_grid)))
+    for day in range(0,365):
+        dayTempArray = np.full((np.size(x_grid),np.size(y_grid)),dailyTemp(day))
+        actualTemp = np.subtract(dayTempArray,elevChanges)
+        averageTemp = np.add(averageTemp, actualTemp)
+
+    divisorForAvg = np.full((np.size(x_grid),np.size(y_grid)),365)
+    finalAvgTemp = np.divide(averageTemp,divisorForAvg)
+
+    return finalAvgTemp
 
 #Generates points with habitability values from 0-10, used for plant spread
-def generateHabitability(plant, moistureList, tempAvgList, xVals, yVals):
+#also propagates disctionary with x,y position and habitability
+def generateHabitability(dict,plant, moistureList, tempAvgList, xVals, yVals):
     habitList = []
     for x in range(0, np.size(xVals)):
         for y in range(0, np.size(yVals)):
@@ -126,25 +136,101 @@ def generateHabitability(plant, moistureList, tempAvgList, xVals, yVals):
 
             habitVal = 0
 
-            if abs(neighborMoistAvg - plant.moisture) < 10:
+            if abs(neighborMoistAvg - plant.moisture) < 10 and abs(neighborTempAvg - plant.temp) < 2:
                 habitVal = habitVal + 5
-            elif abs(neighborMoistAvg - plant.moisture) < 20:
+            elif abs(neighborMoistAvg - plant.moisture) < 30 and abs(neighborTempAvg - plant.temp) < 2:
                 habitVal = habitVal + 2
-            if abs(neighborTempAvg - plant.temp) < 1:
-                habitVal = habitVal + 5
-            elif abs(neighborTempAvg - plant.temp) < 5:
+            elif abs(neighborMoistAvg - plant.moisture) < 20 and abs(neighborTempAvg - plant.temp) < 7:
                 habitVal = habitVal + 2
+
+            dict[(x,y)] = habitVal
 
             habitList.append(habitVal)
 
     return habitList
 
-#Animation for colormap
-def animate(day):
+#CalculatesDistance between points
+def calculateDistance(x1,y1,x2,y2):
+     dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+     return dist
+
+def closestPop(pointX,pointY):
+    minDist = 1000
+    global currentPopulation
+    for x in range(0, currentPopulation.shape[0]):
+        for y in range(0, currentPopulation.shape[1]):
+            if(currentPopulation[x,y] > 500):
+                tempDist = calculateDistance(pointX,pointY,x,y)
+                if(tempDist<minDist):
+                    minDist = tempDist
+    return minDist
+#Searches map for closest habitable area, used in determining if plant can survive to make it to new area
+def nearestHabitat(dict, habitArray):
+    closestDist = 100
+    closestPoint = ()
+    global notLandMask
+    for x in range(0, habitArray.shape[0]):
+        for y in range(0, habitArray.shape[1]):
+            if(not notLandMask[x,y]):
+                keyVal = dict.get((x,y))
+                if(keyVal > 0):
+                    dist = closestPop(x,y)
+                    if(dist < closestDist):
+                        closestDist = dist
+                        closestPoint = (x,y)
+    return closestPoint
+
+#Spreads population to habitable area if close enough
+def popDispersal(population,habitability):
+    global posHabitDict
+    global notLandMask
+    for x in range(0, currentPopulation.shape[0]):
+        for y in range(0, currentPopulation.shape[1]):
+            if(not notLandMask[x,y]):
+                if(population[x,y] == 0):
+                    nearestPoint = nearestHabitat(posHabitDict,habitability)
+                    dist = calculateDistance(x,y,nearestPoint[0],nearestPoint[1])
+                    if(dist < 7):
+                        population[x,y] = 100
+                        break
+
+#Handles when population would spread to neighboring points
+def populationSpread():
+    global currentPopulation
+    for x in range(0, currentPopulation.shape[0]):
+        for y in range(0, currentPopulation.shape[1]):
+            if(currentPopulation[x,y] == 0):
+                neighbors = np.asarray(getNeighbors(x,y,currentPopulation))
+                popHab = np.where(neighbors>=500)
+                if(np.size(popHab) > 0):
+                    currentPopulation[x,y] = 100
+
+#Animation for temperature
+def animateTemp(day):
     dayTempArray = np.full((np.size(x_grid),np.size(y_grid)),dailyTemp(day))
-    dayTempArray[notLandMask] = 0
     actualTemp = np.subtract(dayTempArray,elevChangesCorrected)
+    actualTemp[notLandMask] = 0
     land.set_array(actualTemp[:-1,:-1].flatten('K'))
+
+#Animation for population
+def animateGrowth(day):
+    global currentPopulation
+    global growthRates
+    global testHabFinal
+    prevDayPop = currentPopulation.copy()
+    #Prevents populations over max population
+    popMaxMask = currentPopulation < maxPopulation
+    #Spreads population
+    populationSpread()
+    #Changes population for day
+    np.multiply(currentPopulation, growthRates,out = currentPopulation, where = popMaxMask)
+    #Makes sure not land is visually distinct
+    currentPopulation[notLandMask] = -1000
+
+    if(np.array_equal(prevDayPop, currentPopulation)):
+        popDispersal(currentPopulation,testHabFinal)
+
+    land.set_array(currentPopulation[:-1,:-1].flatten())
 
 #Resample elevation grid creation
 x_grid = np.arange(738641,813939,1000)
@@ -166,6 +252,10 @@ notLandMask = elevFinal < 0
 elevationChanges = np.array(generateTemp(x_grid,y_grid,elevFinal,moistFinal))
 elevChangesCorrected = np.reshape(elevationChanges,(np.size(x_grid),np.size(y_grid)))
 
+#Average year temp of every point, used for creating ranges
+yearAvgTemp = avgTemp(elevChangesCorrected)
+yearAvgTemp[notLandMask] = 0
+
 #Creates 2d array of values for temperature and masks values not on land
 dayTempArray = np.full((np.size(x_grid),np.size(y_grid)),dailyTemp(18))
 dayTempArray[notLandMask] = 0
@@ -173,12 +263,33 @@ dayTempArray[notLandMask] = 0
 #Subtracts elevationTempChange from the current temperature
 actualTemp = np.subtract(dayTempArray,elevChangesCorrected)
 
-#Generate habitability
-dryPlant = plant(45, 20)
-dryHabitability  = generateHabitability(dryPlant, moistFinal, actualTemp, x_grid, y_grid)
-dryHabFinal = np.reshape(dryHabitability,(np.size(x_grid),np.size(y_grid)))
-dryHabFinal[notLandMask] = -10
+#Dict of all points with habitabilities
+posHabitDict = {}
 
+#Generate habitability
+testPlant = plant(80, 20)
+testHabitability  = generateHabitability(posHabitDict,testPlant, moistFinal, yearAvgTemp, x_grid, y_grid)
+testHabFinal = np.reshape(testHabitability,(np.size(x_grid),np.size(y_grid)))
+testHabFinal[notLandMask] = -10
+
+#Creation of array containing max populations
+maxPopulation = np.zeros((np.size(x_grid),np.size(y_grid)))
+
+goodHabMask = testHabFinal == 5
+medHabMask = testHabFinal == 2
+
+maxPopulation[goodHabMask] = 4000
+maxPopulation[medHabMask] = 2500
+
+#Creation of array of rates to multiply population by to get growth every day
+growthRates = np.zeros((np.size(x_grid),np.size(y_grid)))
+growthRates[goodHabMask] = 10
+growthRates[medHabMask] = 5
+
+#Array used for tracking population on a given day
+currentPopulation = np.zeros((np.size(x_grid),np.size(y_grid)))
+currentPopulation[notLandMask] = -1000
+currentPopulation[18,35] = 100
 
 #Colormap
 cdict = {'red': ((0.0, 0.0, 0.0),
@@ -192,7 +303,9 @@ cdict = {'red': ((0.0, 0.0, 0.0),
                   (0.9, 0.2, 0.0),
                   (1.0, 0.0, 0.0))}
 
-my_cmap = m.colors.LinearSegmentedColormap('my_colormap',cdict,256)
+#my_cmap = m.colors.LinearSegmentedColormap('my_colormap',cdict,256)
+
+earthColor = plt.cm.get_cmap('gist_earth')
 
 fig, ax = plt.subplots(1,1)
 
@@ -206,7 +319,7 @@ ax.set_title('Temperature over year')
 #Limits to prevent animation from being shakey
 ax.set(xlim=(2277308,2327400), ylim =(738641,813939))
 
-land = ax.pcolormesh(x_mesh,y_mesh,dryHabFinal,cmap = my_cmap, vmin = -10, vmax = 10)
+land = ax.pcolormesh(x_mesh,y_mesh,currentPopulation,cmap = earthColor.reversed(), vmin = -1000, vmax = 6000)
 plt.colorbar(land, ax=ax)
-#anim = animation.FuncAnimation(fig, animate, interval = 1)
+anim = animation.FuncAnimation(fig, animateGrowth, interval = 1)
 plt.show()
